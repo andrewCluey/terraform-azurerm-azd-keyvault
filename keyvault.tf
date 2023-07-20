@@ -12,8 +12,10 @@ terraform {
 }
 
 data "azurerm_client_config" "current" {}
+
+
 # ------------------------------------------------------------------------------------------------------
-# DEPLOY AZURE KEYVAULT
+# SET NAMING CONVENTIONS
 # ------------------------------------------------------------------------------------------------------
 resource "azurecaf_name" "kv_name" {
   name          = var.resource_token
@@ -22,7 +24,11 @@ resource "azurecaf_name" "kv_name" {
   clean_input   = true
 }
 
-resource "azurerm_key_vault" "kv" {
+
+# ------------------------------------------------------------------------------------------------------
+# DEPLOY AZURE KEYVAULT
+# ------------------------------------------------------------------------------------------------------
+resource "azurerm_key_vault" "main" {
   name                     = azurecaf_name.kv_name.result
   location                 = var.location
   resource_group_name      = var.rg_name
@@ -33,9 +39,11 @@ resource "azurerm_key_vault" "kv" {
   tags = var.tags
 }
 
+
+# Change to use RBAC
 resource "azurerm_key_vault_access_policy" "app" {
   count        = length(var.access_policy_object_ids)
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = azurerm_key_vault.main.id
   tenant_id    = data.azurerm_client_config.current.tenant_id
   object_id    = var.access_policy_object_ids[count.index]
 
@@ -47,9 +55,10 @@ resource "azurerm_key_vault_access_policy" "app" {
   ]
 }
 
+# Change to use RBAC
 resource "azurerm_key_vault_access_policy" "user" {
   count        = var.principal_id == "" ? 0 : 1
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = azurerm_key_vault.main.id
   tenant_id    = data.azurerm_client_config.current.tenant_id
   object_id    = var.principal_id
 
@@ -62,11 +71,12 @@ resource "azurerm_key_vault_access_policy" "user" {
   ]
 }
 
+
 resource "azurerm_key_vault_secret" "secrets" {
   count        = length(var.secrets)
   name         = var.secrets[count.index].name
   value        = var.secrets[count.index].value
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = azurerm_key_vault.main.id
   depends_on = [
     azurerm_key_vault_access_policy.user,
     azurerm_key_vault_access_policy.app
